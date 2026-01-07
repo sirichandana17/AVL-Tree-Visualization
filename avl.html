@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AVL Tree Visualization</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f5f7fa;
+        text-align: center;
+    }
+
+    h1 {
+        margin-top: 20px;
+    }
+
+    .controls {
+        margin: 20px;
+    }
+
+    input {
+        padding: 6px;
+        width: 120px;
+    }
+
+    button {
+        padding: 6px 12px;
+        margin-left: 5px;
+        cursor: pointer;
+    }
+
+    svg {
+        width: 100%;
+        height: 500px;
+        border: 1px solid #ccc;
+        background: white;
+    }
+
+    .node {
+        fill: #4f46e5;
+        stroke: black;
+        stroke-width: 1.5px;
+    }
+
+    .text {
+        fill: white;
+        font-size: 14px;
+        text-anchor: middle;
+        dominant-baseline: middle;
+    }
+
+    .line {
+        stroke: black;
+        stroke-width: 2px;
+    }
+</style>
+</head>
+<body>
+
+<h1>AVL Tree Visualization</h1>
+
+<div class="controls">
+    <input type="number" id="value" placeholder="Enter value">
+    <button onclick="insertValue()">Insert</button>
+    <button onclick="deleteValue()">Delete</button>
+    <button onclick="searchValue()">Search</button>
+    <button onclick="clearAll()">Clear All</button>
+</div>
+<div id="status" style="min-height:20px;margin-bottom:10px;color:#333"></div>
+
+<svg id="tree"></svg>
+
+<script>
+class Node {
+    constructor(value) {
+        this.value = value;
+        this.left = null;
+        this.right = null;
+        this.height = 1;
+        this.x = 0;
+        this.y = 0;
+    }
+}
+
+let root = null;
+const svg = document.getElementById("tree");
+let searchedValue = null;
+let statusTimer = null;
+
+function height(node) {
+    return node ? node.height : 0;
+}
+
+function getBalance(node) {
+    return node ? height(node.left) - height(node.right) : 0;
+}
+
+function rotateRight(y) {
+    let x = y.left;
+    let T2 = x.right;
+
+    x.right = y;
+    y.left = T2;
+
+    y.height = Math.max(height(y.left), height(y.right)) + 1;
+    x.height = Math.max(height(x.left), height(x.right)) + 1;
+
+    return x;
+}
+
+function rotateLeft(x) {
+    let y = x.right;
+    let T2 = y.left;
+
+    y.left = x;
+    x.right = T2;
+
+    x.height = Math.max(height(x.left), height(x.right)) + 1;
+    y.height = Math.max(height(y.left), height(y.right)) + 1;
+
+    return y;
+}
+
+function insert(node, value) {
+    if (!node) return new Node(value);
+
+    if (value < node.value)
+        node.left = insert(node.left, value);
+    else if (value > node.value)
+        node.right = insert(node.right, value);
+    else
+        return node;
+
+    node.height = 1 + Math.max(height(node.left), height(node.right));
+    let balance = getBalance(node);
+
+    // LL
+    if (balance > 1 && value < node.left.value)
+        return rotateRight(node);
+
+    // RR
+    if (balance < -1 && value > node.right.value)
+        return rotateLeft(node);
+
+    // LR
+    if (balance > 1 && value > node.left.value) {
+        node.left = rotateLeft(node.left);
+        return rotateRight(node);
+    }
+
+    // RL
+    if (balance < -1 && value < node.right.value) {
+        node.right = rotateRight(node.right);
+        return rotateLeft(node);
+    }
+
+    return node;
+}
+
+function insertValue() {
+    const val = parseInt(document.getElementById("value").value);
+    if (isNaN(val)) return;
+    if (findNode(root, val)) {
+        setStatus('Duplicate value: ' + val);
+        document.getElementById("value").value = "";
+        return;
+    }
+    root = insert(root, val);
+    draw();
+    setStatus('Inserted ' + val);
+    document.getElementById("value").value = "";
+}
+
+function minValueNode(node) {
+    let current = node;
+    while (current.left) current = current.left;
+    return current;
+}
+
+function deleteNode(node, value) {
+    if (!node) return node;
+
+    if (value < node.value)
+        node.left = deleteNode(node.left, value);
+    else if (value > node.value)
+        node.right = deleteNode(node.right, value);
+    else {
+        // node with only one child or no child
+        if (!node.left || !node.right) {
+            node = node.left ? node.left : node.right;
+        } else {
+            // node with two children: get inorder successor
+            let temp = minValueNode(node.right);
+            node.value = temp.value;
+            node.right = deleteNode(node.right, temp.value);
+        }
+    }
+
+    if (!node) return node;
+
+    // update height and rebalance
+    node.height = 1 + Math.max(height(node.left), height(node.right));
+    let balance = getBalance(node);
+
+    // Left Left
+    if (balance > 1 && getBalance(node.left) >= 0)
+        return rotateRight(node);
+
+    // Left Right
+    if (balance > 1 && getBalance(node.left) < 0) {
+        node.left = rotateLeft(node.left);
+        return rotateRight(node);
+    }
+
+    // Right Right
+    if (balance < -1 && getBalance(node.right) <= 0)
+        return rotateLeft(node);
+
+    // Right Left
+    if (balance < -1 && getBalance(node.right) > 0) {
+        node.right = rotateRight(node.right);
+        return rotateLeft(node);
+    }
+
+    return node;
+}
+
+function deleteValue() {
+    const val = parseInt(document.getElementById("value").value);
+    if (isNaN(val)) return;
+    if (!findNode(root, val)) {
+        setStatus('Value not found: ' + val);
+        document.getElementById("value").value = "";
+        return;
+    }
+    root = deleteNode(root, val);
+    searchedValue = null;
+    draw();
+    setStatus('Deleted ' + val);
+    document.getElementById("value").value = "";
+}
+
+function findNode(node, value) {
+    if (!node) return null;
+    if (value === node.value) return node;
+    return value < node.value ? findNode(node.left, value) : findNode(node.right, value);
+}
+
+function searchValue() {
+    const val = parseInt(document.getElementById("value").value);
+    if (isNaN(val)) return;
+    const found = findNode(root, val);
+    if (found) {
+        searchedValue = val;
+        draw();
+        // clear highlight after a short delay
+        setTimeout(() => { searchedValue = null; draw(); }, 2000);
+        setStatus('Found ' + val);
+    } else {
+        searchedValue = null;
+        draw();
+        setStatus('Value not found: ' + val);
+    }
+    document.getElementById("value").value = "";
+}
+
+function clearAll() {
+    root = null;
+    searchedValue = null;
+    svg.innerHTML = "";
+    setStatus('Cleared all');
+}
+
+function setStatus(msg, timeout = 3000) {
+    const el = document.getElementById('status');
+    if (!el) return;
+    if (statusTimer) clearTimeout(statusTimer);
+    el.textContent = msg;
+    if (timeout) statusTimer = setTimeout(() => { el.textContent = ''; statusTimer = null; }, timeout);
+}
+
+function setPositions(node, depth, x1, x2) {
+    if (!node) return;
+    node.x = (x1 + x2) / 2;
+    node.y = depth * 80 + 40;
+    setPositions(node.left, depth + 1, x1, node.x);
+    setPositions(node.right, depth + 1, node.x, x2);
+}
+
+function drawLines(node) {
+    if (!node) return;
+    if (node.left) {
+        line(node.x, node.y, node.left.x, node.left.y);
+        drawLines(node.left);
+    }
+    if (node.right) {
+        line(node.x, node.y, node.right.x, node.right.y);
+        drawLines(node.right);
+    }
+}
+
+function drawNodes(node) {
+    if (!node) return;
+    const isFound = (searchedValue !== null && node.value === searchedValue);
+    circle(node.x, node.y, node.value, isFound);
+    drawNodes(node.left);
+    drawNodes(node.right);
+}
+
+function draw() {
+    svg.innerHTML = "";
+    setPositions(root, 0, 0, svg.clientWidth);
+    drawLines(root);
+    drawNodes(root);
+}
+
+function circle(x, y, value, highlight = false) {
+    const fill = highlight ? '#ef4444' : '#4f46e5';
+    svg.innerHTML += `
+        <circle class="node" cx="${x}" cy="${y}" r="20" style="fill:${fill}"></circle>
+        <text class="text" x="${x}" y="${y}">${value}</text>
+    `;
+}
+
+function line(x1, y1, x2, y2) {
+    svg.innerHTML += `
+        <line class="line" x1="${x1}" y1="${y1+20}" x2="${x2}" y2="${y2-20}"></line>
+    `;
+}
+</script>
+
+</body>
+</html>
